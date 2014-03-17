@@ -927,13 +927,14 @@ function border_radius_expand($val,$k) {
 }
 /*-- END BORDER-RADIUS --*/
 
-function _mergeCSS($p, &$t) {
+function _mergeSafeCSS($p, $key, &$t) {
 	// Save Cascading CSS e.g. "div.topic p" at this block level
-	if (isset($p) && $p) {
-		if ($t) { 
-			$t = $this->array_merge_recursive_unique($t, $p);
+	if (isset($p[$key]) && $p[$key]) {
+		if ($t) {
+			$t = $this->array_merge_recursive_unique($t, $p[$key]);
+		} else {
+			$t = $p[$key];
 		}
-	   	else { $t = $p; }
 	}
 }
 
@@ -963,10 +964,10 @@ function array_merge_recursive_unique($array1, $array2) {
 
 
 function _mergeFullCSS($p, &$t, $tag, $classes, $id) {
-		$this->_mergeCSS($p[$tag], $t);
+		$this->_mergeSafeCSS($p, $tag, $t);
 		// STYLESHEET CLASS e.g. .smallone{}  .redletter{}
 		foreach($classes AS $class) {
-		  $this->_mergeCSS($p['CLASS>>'.$class], $t);
+		  $this->_mergeSafeCSS($p, 'CLASS>>'.$class, $t);
 		}
 		// STYLESHEET nth-child SELECTOR e.g. tr:nth-child(odd)  td:nth-child(2n+1)
 		if ($tag=='TR' && isset($p) && $p)  {
@@ -993,22 +994,22 @@ function _mergeFullCSS($p, &$t, $tag, $classes, $id) {
 						}
 					}
 					if ($select) {
-		  				$this->_mergeCSS($p[$tag.'>>SELECTORNTHCHILD>>'.$m[1]], $t);
+						$this->_mergeSafeCSS($p, $tag.'>>SELECTORNTHCHILD>>'.$m[1], $t);
 					}
 				}
 			}
 		}
 		// STYLESHEET CLASS e.g. #smallone{}  #redletter{}
 		if (isset($id) && $id) {
-		  $this->_mergeCSS($p['ID>>'.$id], $t);
+			$this->_mergeSafeCSS($p, 'ID>>'.$id, $t);
 		}
 		// STYLESHEET CLASS e.g. .smallone{}  .redletter{}
 		foreach($classes AS $class) {
-		  $this->_mergeCSS($p[$tag.'>>CLASS>>'.$class], $t);
+			$this->_mergeSafeCSS($p, $tag.'>>CLASS>>'.$class, $t);
 		}
 		// STYLESHEET CLASS e.g. #smallone{}  #redletter{}
 		if (isset($id)) {
-		  $this->_mergeCSS($p[$tag.'>>ID>>'.$id], $t);
+			$this->_mergeSafeCSS($p, $tag.'>>ID>>'.$id, $t);
 		}
 }
 
@@ -1030,7 +1031,6 @@ function _set_mergedCSS(&$m, &$p, $d=true, $bd=false) {
 		}
 	}
 }
-
 
 function _mergeBorders(&$b, &$a) {	// Merges $a['BORDER-TOP-STYLE'] to $b['BORDER-TOP'] etc.
   foreach(array('TOP','RIGHT','BOTTOM','LEFT') AS $side) {
@@ -1147,26 +1147,29 @@ function MergeCSS($inherit,$tag,$attr) {
 		//===============================================
 		// Cascading forward CSS
 		//===============================================
-		$this->_mergeFullCSS($this->mpdf->blk[$this->mpdf->blklvl-1]['cascadeCSS'], $this->mpdf->blk[$this->mpdf->blklvl]['cascadeCSS'], $tag, $classes, $attr['ID']);
+		if ($this->mpdf->blklvl > 0) {
+			$this->_mergeFullCSS($this->mpdf->blk[$this->mpdf->blklvl-1]['cascadeCSS'], $this->mpdf->blk[$this->mpdf->blklvl]['cascadeCSS'], $tag, $classes, $attr['ID']);
+		}
 		//===============================================
-		  // Block properties
-		  if (isset($this->mpdf->blk[$this->mpdf->blklvl-1]['margin_collapse']) && $this->mpdf->blk[$this->mpdf->blklvl-1]['margin_collapse']) { $p['MARGIN-COLLAPSE'] = 'COLLAPSE'; }	// custom tag, but follows CSS principle that border-collapse is inherited
-		  if (isset($this->mpdf->blk[$this->mpdf->blklvl-1]['line_height']) && $this->mpdf->blk[$this->mpdf->blklvl-1]['line_height']) { $p['LINE-HEIGHT'] = $this->mpdf->blk[$this->mpdf->blklvl-1]['line_height']; }
+		// Block properties
+		if (isset($this->mpdf->blk[$this->mpdf->blklvl-1]['margin_collapse']) && $this->mpdf->blk[$this->mpdf->blklvl-1]['margin_collapse']) { $p['MARGIN-COLLAPSE'] = 'COLLAPSE'; }	// custom tag, but follows CSS principle that border-collapse is inherited
+		if (isset($this->mpdf->blk[$this->mpdf->blklvl-1]['line_height']) && $this->mpdf->blk[$this->mpdf->blklvl-1]['line_height']) { $p['LINE-HEIGHT'] = $this->mpdf->blk[$this->mpdf->blklvl-1]['line_height']; }
 
-		  if (isset($this->mpdf->blk[$this->mpdf->blklvl-1]['direction']) && $this->mpdf->blk[$this->mpdf->blklvl-1]['direction']) { $p['DIRECTION'] = $this->mpdf->blk[$this->mpdf->blklvl-1]['direction']; }
+		if (isset($this->mpdf->blk[$this->mpdf->blklvl-1]['direction']) && $this->mpdf->blk[$this->mpdf->blklvl-1]['direction']) { $p['DIRECTION'] = $this->mpdf->blk[$this->mpdf->blklvl-1]['direction']; }
 
-		  if (isset($this->mpdf->blk[$this->mpdf->blklvl-1]['align']) && $this->mpdf->blk[$this->mpdf->blklvl-1]['align']) { 
-			if ($this->mpdf->blk[$this->mpdf->blklvl-1]['align'] == 'L') { $p['TEXT-ALIGN'] = 'left'; } 
-			else if ($this->mpdf->blk[$this->mpdf->blklvl-1]['align'] == 'J') { $p['TEXT-ALIGN'] = 'justify'; } 
-			else if ($this->mpdf->blk[$this->mpdf->blklvl-1]['align'] == 'R') { $p['TEXT-ALIGN'] = 'right'; } 
-			else if ($this->mpdf->blk[$this->mpdf->blklvl-1]['align'] == 'C') { $p['TEXT-ALIGN'] = 'center'; } 
-		  }
-		  if ($this->mpdf->ColActive || $this->mpdf->keep_block_together) { 
-		  	if (isset($this->mpdf->blk[$this->mpdf->blklvl-1]['bgcolor']) && $this->mpdf->blk[$this->mpdf->blklvl-1]['bgcolor']) { // Doesn't officially inherit, but default value is transparent (?=inherited)
+		if (isset($this->mpdf->blk[$this->mpdf->blklvl-1]['align']) && $this->mpdf->blk[$this->mpdf->blklvl-1]['align']) {
+			if ($this->mpdf->blk[$this->mpdf->blklvl-1]['align'] == 'L') { $p['TEXT-ALIGN'] = 'left'; }
+			else if ($this->mpdf->blk[$this->mpdf->blklvl-1]['align'] == 'J') { $p['TEXT-ALIGN'] = 'justify'; }
+			else if ($this->mpdf->blk[$this->mpdf->blklvl-1]['align'] == 'R') { $p['TEXT-ALIGN'] = 'right'; }
+			else if ($this->mpdf->blk[$this->mpdf->blklvl-1]['align'] == 'C') { $p['TEXT-ALIGN'] = 'center'; }
+		}
+		if ($this->mpdf->ColActive || $this->mpdf->keep_block_together) {
+			if (isset($this->mpdf->blk[$this->mpdf->blklvl-1]['bgcolor']) && $this->mpdf->blk[$this->mpdf->blklvl-1]['bgcolor']) {
+				// Doesn't officially inherit, but default value is transparent (?=inherited)
 				$cor = $this->mpdf->blk[$this->mpdf->blklvl-1]['bgcolorarray' ];
 				$p['BACKGROUND-COLOR'] = $this->mpdf->_colAtoString($cor);
 			}
-		  }
+		}
 
 		if (isset($this->mpdf->blk[$this->mpdf->blklvl-1]['text_indent']) && ($this->mpdf->blk[$this->mpdf->blklvl-1]['text_indent'] || $this->mpdf->blk[$this->mpdf->blklvl-1]['text_indent']===0)) { $p['TEXT-INDENT'] = $this->mpdf->blk[$this->mpdf->blklvl-1]['text_indent']; }
 		if (isset($this->mpdf->blk[$this->mpdf->blklvl-1]['InlineProperties'])) {
