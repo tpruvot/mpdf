@@ -63,6 +63,12 @@ if (!defined('PHP_VERSION_ID')) {
 $test = pack("d", 134455.474557333333666);
 define("_DSIZE", strlen($test));
 
+// helper function to reduce isset tests
+function ArGetVal($ar, $key) {
+	if (!isset($ar[$key])) return null;
+	return $ar[$key];
+}
+
 class mPDF
 {
 
@@ -269,6 +275,8 @@ var $directw;
 //////////////////////
 // INTERNAL VARIABLES
 //////////////////////
+var $hasOC;
+
 var $writingToC;	// mPDF 5.6.38
 // mPDF 5.6.01
 var $layers;
@@ -1905,11 +1913,13 @@ function SetBackground(&$properties, &$maxwidth) {
 			if (!stristr($bsh ,'%') && !stristr($bsh ,'auto') ) { $bsh = $this->ConvertSize($bsh ,$maxwidth,$this->FontSize); }
 		}
 		$size = array('w'=>$bsw, 'h'=>$bsh);
+	} else {
+		$size = null;
 	}
-	   if (preg_match('/(-moz-)*(repeating-)*(linear|radial)-gradient/',$properties['BACKGROUND-IMAGE'])) {
+	if (preg_match('/(-moz-)*(repeating-)*(linear|radial)-gradient/',$properties['BACKGROUND-IMAGE'])) {
 		return array('gradient'=>$properties['BACKGROUND-IMAGE'], 'origin'=>$origin, 'size'=>$size );	// mPDF 5.6.10
-	   }
-	   else {
+	}
+	else {
 		$file = $properties['BACKGROUND-IMAGE'];
 		$sizesarray = $this->Image($file,0,0,0,0,'','',false, false, false, false, true);
 		if (isset($sizesarray['IMAGE_ID'])) {
@@ -1950,8 +1960,8 @@ function SetBackground(&$properties, &$maxwidth) {
 			else { $opacity = 1; }
 			return array('image_id'=>$image_id, 'orig_w'=>$orig_w, 'orig_h'=>$orig_h, 'x_pos'=>$x_pos, 'y_pos'=>$y_pos, 'x_repeat'=>$x_repeat, 'y_repeat'=>$y_repeat, 'resize'=>$resize, 'opacity'=>$opacity, 'itype'=>$sizesarray['itype'], 'origin'=>$origin, 'size'=>$size );
 		}
-	   }
-	   return false;
+	}
+	return false;
 }
 /*-- END BACKGROUNDS --*/
 
@@ -1988,13 +1998,12 @@ function PrintBodyBackgrounds() {
 		}
 	}
 	if ($this->bodyBackgroundImage) {
-	   if ( $this->bodyBackgroundImage['gradient'] && preg_match('/(-moz-)*(repeating-)*(linear|radial)-gradient/', $this->bodyBackgroundImage['gradient'])) {
-		$g = $this->grad->parseMozGradient( $this->bodyBackgroundImage['gradient']);
-		if ($g) {
-			$s .= $this->grad->Gradient($clx, $cly, $clw, $clh, $g['type'], $g['stops'], $g['colorspace'], $g['coords'], $g['extend'], true);
-		}
-	   }
-	   else if ($this->bodyBackgroundImage['image_id']) {	// Background pattern
+		if (ArGetVal($this->bodyBackgroundImage,'gradient') && preg_match('/(-moz-)*(repeating-)*(linear|radial)-gradient/', $this->bodyBackgroundImage['gradient'])) {
+			$g = $this->grad->parseMozGradient( $this->bodyBackgroundImage['gradient']);
+			if ($g) {
+				$s .= $this->grad->Gradient($clx, $cly, $clw, $clh, $g['type'], $g['stops'], $g['colorspace'], $g['coords'], $g['extend'], true);
+			}
+		} elseif (ArGetVal($this->bodyBackgroundImage,'image_id')) {	// Background pattern
 			$n = count($this->patterns)+1;
 			// If using resize, uses TrimBox (not including the bleed)
 			list($orig_w, $orig_h, $x_repeat, $y_repeat) = $this->_resizeBackgroundImage($this->bodyBackgroundImage['orig_w'], $this->bodyBackgroundImage['orig_h'], $clw, $clh, $this->bodyBackgroundImage['resize'], $this->bodyBackgroundImage['x_repeat'], $this->bodyBackgroundImage['y_repeat']);
@@ -2003,7 +2012,7 @@ function PrintBodyBackgrounds() {
 			if (($this->bodyBackgroundImage['opacity']>0 || $this->bodyBackgroundImage['opacity']==='0') && $this->bodyBackgroundImage['opacity']<1) { $opac = $this->SetAlpha($this->bodyBackgroundImage['opacity'],'Normal',true); }
 			else { $opac = ''; }
 			$s .= sprintf('q /Pattern cs /P%d scn %s %.3F %.3F %.3F %.3F re f Q', $n, $opac, ($clx*_MPDFK), ($cly*_MPDFK),$clw*_MPDFK, $clh*_MPDFK) ."\n";
-	   }
+		}
 	}
 /*-- END BACKGROUNDS --*/
 	return $s;
@@ -3889,11 +3898,11 @@ function Cell($w,$h=0,$txt='',$border=0,$ln=0,$align='',$fill=0,$link='', $curre
 		if($this->ColorFlag) $s .='q '.$this->TextColor.' ';
 
 		// OUTLINE
-		if($this->textparam['outline-s'] && !$this->S) {	// mPDF 5.6.07
+		if (ArGetVal($this->textparam,'outline-s') && !$this->S) {	// mPDF 5.6.07
 			$s .=' '.sprintf('%.3F w',$this->LineWidth*_MPDFK).' ';
 			$s .=" $this->DrawColor ";
 			$s .=" 2 Tr ";
-    		}
+		}
 		else if ($this->falseBoldWeight && strpos($this->ReqFontStyle,"B") !== false && strpos($this->FontStyle,"B") === false && !$this->S) {	// can't use together with OUTLINE or Small Caps
 			$s .= ' 2 Tr 1 J 1 j ';
 			$s .= ' '.sprintf('%.3F w',($this->FontSize/130)*_MPDFK*$this->falseBoldWeight).' ';
@@ -5886,7 +5895,7 @@ function WriteFlowingBlock( $s)
 
 		// mPDF 5.6.21   Hard Hyphens -
 		$hardsuccess = false;
-		if ($this->textparam['hyphens'] != 2 && preg_match("/\-/",$currWord)) {	
+		if (ArGetVal($this->textparam,'hyphens') != 2 && preg_match("/\-/",$currWord)) {
 			$rem = $maxWidth - $WidthCorrection - (($this->cMarginL+$this->cMarginR)*_MPDFK) - ($paddingL+$paddingR +(($fpaddingL + $fpaddingR) * _MPDFK) );
 			list($hardsuccess,$pre,$post,$prelength) = $this->hardHyphenate($currWord, (($rem-$cutoffWidth)/_MPDFK -$this->GetCharWidth("-", false)) );
 			if ($hardsuccess) { 
@@ -5900,12 +5909,12 @@ function WriteFlowingBlock( $s)
 		
 /*-- HYPHENATION --*/
 		// Soft Hyphens chr(173)
-		else if ($this->textparam['hyphens'] != 2 && (!$this->usingCoreFont && preg_match("/\xc2\xad/",$currWord)) || ($this->usingCoreFont && preg_match("/".chr(173)."/",$currWord) && ($this->FontFamily!='csymbol' && $this->FontFamily!='czapfdingbats')) ) {	// mPDF 5.6.06
+		else if (ArGetVal($this->textparam,'hyphens') != 2 && (!$this->usingCoreFont && preg_match("/\xc2\xad/",$currWord)) || ($this->usingCoreFont && preg_match("/".chr(173)."/",$currWord) && ($this->FontFamily!='csymbol' && $this->FontFamily!='czapfdingbats')) ) {	// mPDF 5.6.06
 			$rem = $maxWidth - $WidthCorrection - (($this->cMarginL+$this->cMarginR)*_MPDFK) - ($paddingL+$paddingR +(($fpaddingL + $fpaddingR) * _MPDFK) );
 			list($success,$pre,$post,$prelength) = $this->softHyphenate($currWord, (($rem-$cutoffWidth)/_MPDFK -$this->GetCharWidth(" ", false)) );
 		}
 
-		if (!$success && !$hardsuccess && $this->textparam['hyphens'] == 1 ) { 	// mPDF 5.6.06	// mPDF 5.6.21
+		if (!$success && !$hardsuccess && ArGetVal($this->textparam,'hyphens') == 1 ) { 	// mPDF 5.6.06	// mPDF 5.6.21
 			// Look ahead to get current word
 			for($ac = $i; $ac<(mb_strlen($s)-1); $ac++) {
 				$addc = mb_substr($s,$ac,1,$this->mb_enc );
@@ -13504,26 +13513,26 @@ function WriteFixedPosHTML($html='',$x, $y, $w, $h, $overflow='visible', $boundi
 		}
 		// Copy over (only) the properties to set for border and background
 		$pb = array();
-		$pb['MARGIN-TOP'] = $p['MARGIN-TOP']; 
-		$pb['MARGIN-RIGHT'] = $p['MARGIN-RIGHT']; 
-		$pb['MARGIN-BOTTOM'] = $p['MARGIN-BOTTOM']; 
-		$pb['MARGIN-LEFT'] = $p['MARGIN-LEFT']; 
-		$pb['PADDING-TOP'] = $p['PADDING-TOP']; 
-		$pb['PADDING-RIGHT'] = $p['PADDING-RIGHT']; 
-		$pb['PADDING-BOTTOM'] = $p['PADDING-BOTTOM']; 
-		$pb['PADDING-LEFT'] = $p['PADDING-LEFT']; 
-		$pb['BORDER-TOP'] = $p['BORDER-TOP']; 
-		$pb['BORDER-RIGHT'] = $p['BORDER-RIGHT']; 
-		$pb['BORDER-BOTTOM'] = $p['BORDER-BOTTOM']; 
-		$pb['BORDER-LEFT'] = $p['BORDER-LEFT']; 
-		$pb['BORDER-TOP-LEFT-RADIUS-H'] = $p['BORDER-TOP-LEFT-RADIUS-H'];
-		$pb['BORDER-TOP-LEFT-RADIUS-V'] = $p['BORDER-TOP-LEFT-RADIUS-V'];
-		$pb['BORDER-TOP-RIGHT-RADIUS-H'] = $p['BORDER-TOP-RIGHT-RADIUS-H'];
-		$pb['BORDER-TOP-RIGHT-RADIUS-V'] = $p['BORDER-TOP-RIGHT-RADIUS-V'];
-		$pb['BORDER-BOTTOM-LEFT-RADIUS-H'] = $p['BORDER-BOTTOM-LEFT-RADIUS-H'];
-		$pb['BORDER-BOTTOM-LEFT-RADIUS-V'] = $p['BORDER-BOTTOM-LEFT-RADIUS-V'];
-		$pb['BORDER-BOTTOM-RIGHT-RADIUS-H'] = $p['BORDER-BOTTOM-RIGHT-RADIUS-H'];
-		$pb['BORDER-BOTTOM-RIGHT-RADIUS-V'] = $p['BORDER-BOTTOM-RIGHT-RADIUS-V'];
+		$pb['MARGIN-TOP'] = ArGetVal($p,'MARGIN-TOP');
+		$pb['MARGIN-RIGHT'] = ArGetVal($p,'MARGIN-RIGHT');
+		$pb['MARGIN-BOTTOM'] = ArGetVal($p,'MARGIN-BOTTOM');
+		$pb['MARGIN-LEFT'] = ArGetVal($p,'MARGIN-LEFT');
+		$pb['PADDING-TOP'] = ArGetVal($p,'PADDING-TOP');
+		$pb['PADDING-RIGHT'] = ArGetVal($p,'PADDING-RIGHT');
+		$pb['PADDING-BOTTOM'] = ArGetVal($p,'PADDING-BOTTOM');
+		$pb['PADDING-LEFT'] = ArGetVal($p,'PADDING-LEFT');
+		$pb['BORDER-TOP'] = ArGetVal($p,'BORDER-TOP');
+		$pb['BORDER-RIGHT'] = ArGetVal($p,'BORDER-RIGHT');
+		$pb['BORDER-BOTTOM'] = ArGetVal($p,'BORDER-BOTTOM');
+		$pb['BORDER-LEFT'] = ArGetVal($p,'BORDER-LEFT');
+		$pb['BORDER-TOP-LEFT-RADIUS-H'] = ArGetVal($p,'BORDER-TOP-LEFT-RADIUS-H');
+		$pb['BORDER-TOP-LEFT-RADIUS-V'] = ArGetVal($p,'BORDER-TOP-LEFT-RADIUS-V');
+		$pb['BORDER-TOP-RIGHT-RADIUS-H'] = ArGetVal($p,'BORDER-TOP-RIGHT-RADIUS-H');
+		$pb['BORDER-TOP-RIGHT-RADIUS-V'] = ArGetVal($p,'BORDER-TOP-RIGHT-RADIUS-V');
+		$pb['BORDER-BOTTOM-LEFT-RADIUS-H'] = ArGetVal($p,'BORDER-BOTTOM-LEFT-RADIUS-H');
+		$pb['BORDER-BOTTOM-LEFT-RADIUS-V'] = ArGetVal($p,'BORDER-BOTTOM-LEFT-RADIUS-V');
+		$pb['BORDER-BOTTOM-RIGHT-RADIUS-H'] = ArGetVal($p,'BORDER-BOTTOM-RIGHT-RADIUS-H');
+		$pb['BORDER-BOTTOM-RIGHT-RADIUS-V'] = ArGetVal($p,'BORDER-BOTTOM-RIGHT-RADIUS-V');
 		if (isset($p['BACKGROUND-COLOR'])) { $pb['BACKGROUND-COLOR'] = $p['BACKGROUND-COLOR']; }
 		if (isset($p['BOX-SHADOW'])) { $pb['BOX-SHADOW'] = $p['BOX-SHADOW']; }
 /*-- BACKGROUNDS --*/
@@ -13550,25 +13559,27 @@ function WriteFixedPosHTML($html='',$x, $y, $w, $h, $overflow='visible', $boundi
 		$bbox_pl = $this->blk[1]['padding_left'];
 		$bbox_pt = $this->blk[1]['padding_top'];
 		$bbox_pb = $this->blk[1]['padding_bottom'];
+
 		$bbox_mr = $this->blk[1]['margin_right'];
-		if (strtolower($p['MARGIN-RIGHT'])=='auto') { $bbox_mr = 'auto'; }
+		if (strtolower(ArGetVal($p,'MARGIN-RIGHT'))=='auto') { $bbox_mr = 'auto'; }
 		$bbox_ml = $this->blk[1]['margin_left'];
-		if (strtolower($p['MARGIN-LEFT'])=='auto') { $bbox_ml = 'auto'; }
+		if (strtolower(ArGetVal($p,'MARGIN-LEFT'))=='auto') { $bbox_ml = 'auto'; }
 		$bbox_mt = $this->blk[1]['margin_top'];
-		if (strtolower($p['MARGIN-TOP'])=='auto') { $bbox_mt = 'auto'; }
+		if (strtolower(ArGetVal($p,'MARGIN-TOP'))=='auto') { $bbox_mt = 'auto'; }
 		$bbox_mb = $this->blk[1]['margin_bottom'];
- 		if (strtolower($p['MARGIN-BOTTOM'])=='auto') { $bbox_mb = 'auto'; }
+		if (strtolower(ArGetVal($p,'MARGIN-BOTTOM'))=='auto') { $bbox_mb = 'auto'; }
+
 		if (isset($p['LEFT']) && strtolower($p['LEFT'])!='auto') { $bbox_left = $this->ConvertSize($p['LEFT'], $cont_w, $this->FontSize,false); }
 		else { $bbox_left = 'auto'; }
- 		if (isset($p['TOP']) && strtolower($p['TOP'])!='auto') { $bbox_top = $this->ConvertSize($p['TOP'], $cont_h, $this->FontSize,false); }
+		if (isset($p['TOP']) && strtolower($p['TOP'])!='auto') { $bbox_top = $this->ConvertSize($p['TOP'], $cont_h, $this->FontSize,false); }
 		else { $bbox_top = 'auto'; }
- 		if (isset($p['RIGHT']) && strtolower($p['RIGHT'])!='auto') { $bbox_right = $this->ConvertSize($p['RIGHT'], $cont_w, $this->FontSize,false); }
+		if (isset($p['RIGHT']) && strtolower($p['RIGHT'])!='auto') { $bbox_right = $this->ConvertSize($p['RIGHT'], $cont_w, $this->FontSize,false); }
 		else { $bbox_right = 'auto'; }
- 		if (isset($p['BOTTOM']) && strtolower($p['BOTTOM'])!='auto') { $bbox_bottom = $this->ConvertSize($p['BOTTOM'], $cont_h, $this->FontSize,false); }
+		if (isset($p['BOTTOM']) && strtolower($p['BOTTOM'])!='auto') { $bbox_bottom = $this->ConvertSize($p['BOTTOM'], $cont_h, $this->FontSize,false); }
 		else { $bbox_bottom = 'auto'; }
- 		if (isset($p['WIDTH']) && strtolower($p['WIDTH'])!='auto') { $inner_w = $this->ConvertSize($p['WIDTH'], $cont_w, $this->FontSize,false); }
+		if (isset($p['WIDTH']) && strtolower($p['WIDTH'])!='auto') { $inner_w = $this->ConvertSize($p['WIDTH'], $cont_w, $this->FontSize,false); }
 		else { $inner_w = 'auto'; }
- 		if (isset($p['HEIGHT']) && strtolower($p['HEIGHT'])!='auto') { $inner_h = $this->ConvertSize($p['HEIGHT'], $cont_h, $this->FontSize,false); }
+		if (isset($p['HEIGHT']) && strtolower($p['HEIGHT'])!='auto') { $inner_h = $this->ConvertSize($p['HEIGHT'], $cont_h, $this->FontSize,false); }
 		else { $inner_h = 'auto'; }
 
 		// If bottom or right pos are set and not left / top - save this to adjust rotated block later
@@ -13586,6 +13597,7 @@ function WriteFixedPosHTML($html='',$x, $y, $w, $h, $overflow='visible', $boundi
 		// Algorithm from CSS2.1  See http://www.w3.org/TR/CSS21/visudet.html#abs-non-replaced-height
 		// mPD 5.3.14
 		// Special case (not CSS) if all not specified, centre vertically on page
+		$bbox_top_orig = null;
 		if ($bbox_top==='auto' && $inner_h==='auto' && $bbox_bottom==='auto' && $bbox_mt==='auto' && $bbox_mb==='auto') {
 			$bbox_top_orig = $bbox_top; 
 			if ($bbox_mt==='auto') { $bbox_mt = 0; }
@@ -22879,7 +22891,7 @@ function TableWordWrap($maxwidth, $forcewrap = 0, $textbuffer = '', $def_fontsiz
 		// Word does not fit on line...
 		else {
 				// mPDF 5.6.21  hard hyphens
-				if ($this->textparam['hyphens'] != 2 && preg_match('/\-/',$word)) {
+				if (ArGetVal($this->textparam,'hyphens') != 2 && preg_match('/\-/',$word)) {
 					list($hardsuccess,$pre,$post,$prelength) = $this->hardHyphenate($word, ($maxwidth - $width)-$this->GetCharWidth("-", false));
 					if ($hardsuccess) { 
 						$text .= $pre.'-';
@@ -22890,7 +22902,7 @@ function TableWordWrap($maxwidth, $forcewrap = 0, $textbuffer = '', $def_fontsiz
 				}
 /*-- HYPHENATION --*/
 				// Soft Hyphens chr(173)
-				else if ($this->textparam['hyphens'] != 2 && (!$this->usingCoreFont && preg_match("/\xc2\xad/",$word)) || ($this->usingCoreFont && preg_match("/".chr(173)."/",$word) && ($this->FontFamily!='csymbol' && $this->FontFamily!='czapfdingbats')) ) {	// mPDF 5.6.06  5.6.08
+				else if (ArGetVal($this->textparam,'hyphens') != 2 && (!$this->usingCoreFont && preg_match("/\xc2\xad/",$word)) || ($this->usingCoreFont && preg_match("/".chr(173)."/",$word) && ($this->FontFamily!='csymbol' && $this->FontFamily!='czapfdingbats')) ) {	// mPDF 5.6.06  5.6.08
 					list($success,$pre,$post,$prelength) = $this->softHyphenate($word, ($maxwidth - $width));
 					if ($success) { 
 						$text .= $pre.'-';
@@ -22899,7 +22911,7 @@ function TableWordWrap($maxwidth, $forcewrap = 0, $textbuffer = '', $def_fontsiz
 						if ($k==(count($words)-1)) { $wordwidth += $rbw; }
 					}
 				}
-				else if ($this->textparam['hyphens'] == 1) { 	// mPDF 5.6.06   5.6.08
+				else if (ArGetVal($this->textparam,'hyphens') == 1) { 	// mPDF 5.6.06   5.6.08
 					list($success,$pre,$post,$prelength) = $this->hyphenateWord($word, ($maxwidth - $width));
 					if ($success) { 
 						$text .= $pre.'-';
@@ -27179,7 +27191,7 @@ function _putpatterns() {
 		$orig_h = $this->patterns[$i]['orig_h']; 
 		$image_id = $this->patterns[$i]['image_id'];
 		$itype = $this->patterns[$i]['itype'];
-		$bpa = $this->patterns[$i]['bpa'];	// mPDF 5.6.10  background positioning area
+		$bpa = ArGetVal($this->patterns[$i],'bpa');	// mPDF 5.6.10  background positioning area
 
 		if ($this->patterns[$i]['x_repeat']) { $x_repeat = true; } 
 		else { $x_repeat = false; }
